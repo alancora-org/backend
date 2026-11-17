@@ -8,8 +8,8 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.alancora.model.User;
 import org.alancora.config.Env;
+import org.alancora.model.User;
 import org.alancora.service.AuthService;
 import org.alancora.service.Tokens;
 
@@ -36,7 +36,7 @@ public final class AuthHandler {
 
         String method = switch (path) {
             case "/api/auth/me" -> "GET";
-            case "/api/auth/login", "/api/auth/register", "/api/auth/logout" -> "POST";
+            case "/api/auth/login", "/api/auth/register", "/api/auth/logout", "/api/auth/details" -> "POST";
             default -> null;
         };
 
@@ -52,26 +52,52 @@ public final class AuthHandler {
         }
 
         switch (path) {
-            case "/api/auth/me" -> me(exchange);
+            case "/api/auth/me" -> profile(exchange, false);
+            case "/api/auth/details" -> profile(exchange, true);
             case "/api/auth/logout" -> logout(exchange);
             case "/api/auth/login" -> authenticate(exchange, false);
             case "/api/auth/register" -> authenticate(exchange, true);
         }
     }
 
-    private void me(HttpExchange exchange) throws IOException {
-        User user = tokens.read(token(exchange));
+    private void profile(final HttpExchange exchange, final boolean save) throws IOException {
+        final User session = tokens.read(token(exchange));
 
-        if (user == null) {
+        if (session == null) {
             error(exchange, 401, "Entre na sua conta para continuar.");
             return;
         }
 
-        String json = "{\"id\":" + user.getId()
-                + ",\"name\":" + quote(user.getName())
-                + ",\"email\":" + quote(user.getEmail()) + "}";
+        try {
+            final User user;
 
-        ApiServer.respond(exchange, 200, json);
+            if (save) {
+                final Map<String, String> form = readForm(exchange);
+                user = auth.saveDetails(session.getId(), form.getOrDefault("housing", ""),
+                        form.getOrDefault("location", ""));
+            } else {
+                user = auth.findById(session.getId());
+            }
+
+            if (user == null) {
+                error(exchange, 401, "Entre na sua conta para continuar.");
+                return;
+            }
+
+            final String json = "{\"id\":" + user.getId()
+                    + ",\"name\":" + quote(user.getName())
+                    + ",\"email\":" + quote(user.getEmail())
+                    + ",\"housing\":" + quote(user.getHousing())
+                    + ",\"location\":" + quote(user.getLocation()) + "}";
+
+            ApiServer.respond(exchange, 200, json);
+        } catch (final RequestException error) {
+            error(exchange, error.status, error.getMessage());
+        } catch (final IllegalArgumentException error) {
+            error(exchange, 400, error.getMessage());
+        } catch (final SQLException error) {
+            error(exchange, 503, "Não foi possível acessar o banco. Tente novamente.");
+        }
     }
 
     private void logout(HttpExchange exchange) throws IOException {
@@ -114,7 +140,7 @@ public final class AuthHandler {
     private static Map<String, String> readForm(HttpExchange exchange) throws IOException {
         String type = exchange.getRequestHeaders().getFirst("Content-Type");
 
-        if (type == null) {
+        if (type == null || !type.split(";", 2)[0].strip().equalsIgnoreCase("application/x-www-form-urlencoded")) {
             throw new RequestException(415, "Formato de formulário inválido.");
         }
 

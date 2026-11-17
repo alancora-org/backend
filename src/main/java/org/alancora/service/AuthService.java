@@ -51,6 +51,27 @@ public final class AuthService {
         return user;
     }
 
+    public User findById(final long id) throws SQLException {
+        return users.findById(id);
+    }
+
+    public User saveDetails(final long id, final String housing, final String location) throws SQLException {
+        final String cleanHousing = cleanDetail(housing, "Moradia");
+        final String cleanLocation = cleanDetail(location, "Localização aproximada");
+
+        return users.saveDetails(id, cleanHousing, cleanLocation);
+    }
+
+    private static String cleanDetail(final String value, final String label) {
+        final String text = value.strip();
+
+        if (text.length() > 120 || text.chars().anyMatch(Character::isISOControl)) {
+            throw new IllegalArgumentException(label + " deve ter até 120 caracteres, sem quebras de linha.");
+        }
+
+        return text;
+    }
+
     private static String normalizeEmail(final String email) {
         final String cleanEmail = email.strip().toLowerCase(Locale.ROOT);
 
