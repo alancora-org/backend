@@ -1,5 +1,7 @@
 package org.alancora.model;
 
+import java.util.List;
+
 public final class User {
     private final long id;
     private final String name;
@@ -7,6 +9,7 @@ public final class User {
     private final String passwordHash;
     private final String housing;
     private final String location;
+    private final List<String> needs;
 
     public User(final long id, final String name, final String email, final String passwordHash) {
         this(id, name, email, passwordHash, "", "");
@@ -14,12 +17,18 @@ public final class User {
 
     public User(final long id, final String name, final String email, final String passwordHash,
             final String housing, final String location) {
+        this(id, name, email, passwordHash, housing, location, List.of());
+    }
+
+    public User(final long id, final String name, final String email, final String passwordHash,
+            final String housing, final String location, final List<String> needs) {
         this.id = id;
         this.name = name;
         this.email = email;
         this.passwordHash = passwordHash;
         this.housing = housing;
         this.location = location;
+        this.needs = List.copyOf(needs);
     }
 
     public long getId() {
@@ -44,5 +53,9 @@ public final class User {
 
     public String getLocation() {
         return location;
+    }
+
+    public List<String> getNeeds() {
+        return needs;
     }
 }

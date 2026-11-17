@@ -5,10 +5,14 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.alancora.config.Env;
+import org.alancora.model.Need;
 import org.alancora.model.User;
 import org.alancora.service.AuthService;
 import org.alancora.service.Tokens;
@@ -72,9 +76,9 @@ public final class AuthHandler {
             final User user;
 
             if (save) {
-                final Map<String, String> form = readForm(exchange);
-                user = auth.saveDetails(session.getId(), form.getOrDefault("housing", ""),
-                        form.getOrDefault("location", ""));
+                final Map<String, List<String>> form = readForm(exchange);
+                user = auth.saveDetails(session.getId(), value(form, "housing"), value(form, "location"),
+                        choices(form, "needs"));
             } else {
                 user = auth.findById(session.getId());
             }
@@ -88,7 +92,9 @@ public final class AuthHandler {
                     + ",\"name\":" + quote(user.getName())
                     + ",\"email\":" + quote(user.getEmail())
                     + ",\"housing\":" + quote(user.getHousing())
-                    + ",\"location\":" + quote(user.getLocation()) + "}";
+                    + ",\"location\":" + quote(user.getLocation())
+                    + ",\"needs\":" + array(user.getNeeds())
+                    + (save ? "" : ",\"options\":" + options(auth.listNeeds())) + "}";
 
             ApiServer.respond(exchange, 200, json);
         } catch (final RequestException error) {
@@ -107,17 +113,17 @@ public final class AuthHandler {
 
     private void authenticate(HttpExchange exchange, boolean register) throws IOException {
         try {
-            Map<String, String> form = readForm(exchange);
+            final Map<String, List<String>> form = readForm(exchange);
 
-            String email = form.getOrDefault("email", "");
-            String password = form.getOrDefault("password", "");
+            final String email = value(form, "email");
+            final String password = value(form, "password");
 
             User user = register
                     ? auth.register(
-                            form.getOrDefault("name", ""),
+                            value(form, "name"),
                             email,
                             password,
-                            form.getOrDefault("confirmation", ""))
+                            value(form, "confirmation"))
                     : auth.login(email, password);
 
             setCookie(exchange, tokens.create(user), Tokens.DURATION);
@@ -137,7 +143,7 @@ public final class AuthHandler {
         }
     }
 
-    private static Map<String, String> readForm(HttpExchange exchange) throws IOException {
+    private static Map<String, List<String>> readForm(HttpExchange exchange) throws IOException {
         String type = exchange.getRequestHeaders().getFirst("Content-Type");
 
         if (type == null || !type.split(";", 2)[0].strip().equalsIgnoreCase("application/x-www-form-urlencoded")) {
@@ -150,7 +156,7 @@ public final class AuthHandler {
             throw new RequestException(413, "Formulário muito grande.");
         }
 
-        Map<String, String> form = new HashMap<>();
+        final Map<String, List<String>> form = new HashMap<>();
         String body = new String(bytes, StandardCharsets.UTF_8);
 
         for (String part : body.split("&")) {
@@ -161,15 +167,34 @@ public final class AuthHandler {
             }
 
             try {
-                form.put(
-                        URLDecoder.decode(pair[0], StandardCharsets.UTF_8),
-                        URLDecoder.decode(pair[1], StandardCharsets.UTF_8));
+                final String name = URLDecoder.decode(pair[0], StandardCharsets.UTF_8);
+                final String value = URLDecoder.decode(pair[1], StandardCharsets.UTF_8);
+                form.computeIfAbsent(name, key -> new ArrayList<>()).add(value);
             } catch (IllegalArgumentException e) {
                 throw new RequestException(400, "Formulário inválido.");
             }
         }
 
         return form;
+    }
+
+    private static String value(final Map<String, List<String>> form, final String name) {
+        return form.getOrDefault(name, List.of("")).getLast();
+    }
+
+    private static List<String> choices(final Map<String, List<String>> form, final String name) {
+        final List<String> values = form.get(name);
+        return values == null ? null : values.stream().filter(value -> !value.isEmpty()).toList();
+    }
+
+    private static String array(final List<String> values) {
+        return values.stream().map(AuthHandler::quote).collect(Collectors.joining(",", "[", "]"));
+    }
+
+    private static String options(final List<Need> needs) {
+        return needs.stream().map(need -> "{\"code\":" + quote(need.getCode())
+                + ",\"name\":" + quote(need.getName()) + "}")
+                .collect(Collectors.joining(",", "[", "]"));
     }
 
     private void setCookie(HttpExchange exchange, String token, Duration age) {

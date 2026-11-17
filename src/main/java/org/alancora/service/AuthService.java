@@ -1,9 +1,11 @@
 package org.alancora.service;
 
 import java.sql.SQLException;
+import java.util.List;
 import java.util.Locale;
 
 import org.alancora.dao.UserDao;
+import org.alancora.model.Need;
 import org.alancora.model.User;
 
 public final class AuthService {
@@ -55,11 +57,17 @@ public final class AuthService {
         return users.findById(id);
     }
 
-    public User saveDetails(final long id, final String housing, final String location) throws SQLException {
+    public User saveDetails(final long id, final String housing, final String location,
+            final List<String> needs) throws SQLException {
         final String cleanHousing = cleanDetail(housing, "Moradia");
         final String cleanLocation = cleanDetail(location, "Localização aproximada");
+        final List<String> cleanNeeds = cleanNeeds(needs);
 
-        return users.saveDetails(id, cleanHousing, cleanLocation);
+        return users.saveDetails(id, cleanHousing, cleanLocation, cleanNeeds);
+    }
+
+    public List<Need> listNeeds() throws SQLException {
+        return users.listNeeds();
     }
 
     private static String cleanDetail(final String value, final String label) {
@@ -70,6 +78,20 @@ public final class AuthService {
         }
 
         return text;
+    }
+
+    private List<String> cleanNeeds(final List<String> values) throws SQLException {
+        if (values == null) {
+            return null;
+        }
+
+        final List<String> codes = listNeeds().stream().map(Need::getCode).toList();
+
+        if (values.stream().anyMatch(code -> !codes.contains(code))) {
+            throw new IllegalArgumentException("Selecione apenas as necessidades de assistência disponíveis.");
+        }
+
+        return values.stream().distinct().sorted().toList();
     }
 
     private static String normalizeEmail(final String email) {
