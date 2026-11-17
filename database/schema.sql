@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS usuario (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL CHECK (char_length(trim(nome)) >= 2),
+    email VARCHAR(254) NOT NULL UNIQUE CHECK (email = lower(trim(email))),
+    senha_hash VARCHAR(255) NOT NULL,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
