@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.alancora.model.User;
+import org.alancora.config.Env;
 import org.alancora.service.AuthService;
 import org.alancora.service.Tokens;
 
@@ -25,9 +26,9 @@ public final class AuthHandler {
     public AuthHandler(AuthService auth) {
         this.auth = auth;
 
-        this.tokens = new Tokens(System.getenv("JWT_SECRET"));
+        this.tokens = new Tokens(Env.get("JWT_SECRET"));
         this.secure = Boolean.parseBoolean(
-                System.getenv().getOrDefault("COOKIE_SECURE", "false"));
+                Env.get("COOKIE_SECURE", "false"));
     }
 
     public void handle(HttpExchange exchange) throws IOException {

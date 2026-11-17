@@ -5,10 +5,11 @@ import java.sql.SQLException;
 
 import org.alancora.api.ApiServer;
 import org.alancora.config.Database;
+import org.alancora.config.Env;
 
 public final class Main {
     public static void main(final String[] args) throws IOException, SQLException {
-        final int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "8080"));
+        final int port = Integer.parseInt(Env.get("PORT", "8080"));
         if (port < 1 || port > 65535) {
             throw new IllegalArgumentException("PORT deve estar entre 1 e 65535.");
         }

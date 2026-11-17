@@ -34,7 +34,7 @@ public final class Database {
     }
 
     public static Connection connect() throws SQLException {
-        final String url = System.getenv("DB_URL");
+        final String url = Env.get("DB_URL");
         if (url == null || url.isBlank()) {
             throw new SQLException("Defina DB_URL para conectar ao banco.");
         }
