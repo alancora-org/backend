@@ -67,6 +67,73 @@ public class PlanDao {
         }
     }
 
+    public Plan update(final long id, final User user, final Emergency emergency, final int version,
+            final List<Orientation> items) throws SQLException {
+        final String sql = "UPDATE plano SET versao_regras = ?, emergencia = ?, nome = ?, moradia = ?, "
+                + "localizacao_aproximada = ?, tipo_moradia = ?, necessidades = ? "
+                + "WHERE id = ? AND usuario_id = ? RETURNING " + COLUMNS;
+
+        try (final Connection connection = Database.connect()) {
+            connection.setAutoCommit(false);
+
+            try (final PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, version);
+                statement.setString(2, emergency.name());
+                statement.setString(3, user.getName());
+                statement.setString(4, user.getHousing());
+                statement.setString(5, user.getLocation());
+                statement.setString(6, user.getHousingType());
+                statement.setLong(8, id);
+                statement.setLong(9, user.getId());
+
+                final Array needs = connection.createArrayOf("text",
+                        user.getNeeds().stream().distinct().sorted().toArray(String[]::new));
+                final Plan plan;
+
+                try {
+                    statement.setArray(7, needs);
+
+                    try (final ResultSet result = statement.executeQuery()) {
+                        if (!result.next()) {
+                            connection.rollback();
+                            return null;
+                        }
+
+                        plan = read(result, items);
+                    }
+                } finally {
+                    needs.free();
+                }
+
+                try (final PreparedStatement delete = connection.prepareStatement(
+                        "DELETE FROM orientacao WHERE plano_id = ?")) {
+                    delete.setLong(1, id);
+                    delete.executeUpdate();
+                }
+
+                saveOrientations(connection, id, items);
+
+                connection.commit();
+                return plan;
+            } catch (final SQLException | RuntimeException error) {
+                connection.rollback();
+                throw error;
+            }
+        }
+    }
+
+    public boolean delete(final long userId, final long id) throws SQLException {
+        final String sql = "DELETE FROM plano WHERE id = ? AND usuario_id = ?";
+
+        try (final Connection connection = Database.connect();
+                final PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, id);
+            statement.setLong(2, userId);
+
+            return statement.executeUpdate() == 1;
+        }
+    }
+
     public List<Plan> list(final long userId) throws SQLException {
         final String sql = "SELECT " + COLUMNS + " FROM plano WHERE usuario_id = ? ORDER BY id DESC";
 

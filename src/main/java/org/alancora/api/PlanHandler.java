@@ -38,14 +38,19 @@ public final class PlanHandler {
     public void handle(final HttpExchange exchange) throws IOException {
         final String path = exchange.getRequestURI().getPath();
         final boolean collection = path.equals("/api/plans");
+
         if (!collection && !path.matches("/api/plans/[1-9][0-9]*")) {
             error(exchange, 404, "Rota não encontrada.");
             return;
         }
 
         final String method = exchange.getRequestMethod();
-        if (!method.equals("GET") && !(collection && method.equals("POST"))) {
-            exchange.getResponseHeaders().set("Allow", collection ? "GET, POST" : "GET");
+        final boolean allowed = collection
+                ? method.equals("GET") || method.equals("POST")
+                : method.equals("GET") || method.equals("PUT") || method.equals("DELETE");
+
+        if (!allowed) {
+            exchange.getResponseHeaders().set("Allow", collection ? "GET, POST" : "GET, PUT, DELETE");
             error(exchange, 405, "Método não permitido.");
             return;
         }
@@ -59,6 +64,7 @@ public final class PlanHandler {
         try {
             if (method.equals("POST")) {
                 final Plan plan = plans.create(session.getId(), value(readForm(exchange), "emergency"));
+
                 exchange.getResponseHeaders().set("Location", "/api/plans/" + plan.id());
                 ApiServer.respond(exchange, 201, json(plan));
             } else if (collection) {
@@ -67,10 +73,25 @@ public final class PlanHandler {
                         .collect(Collectors.joining(",", "[", "]"));
                 final String items = plans.list(session.getId()).stream().map(PlanHandler::summary)
                         .collect(Collectors.joining(",", "[", "]"));
+
                 ApiServer.respond(exchange, 200, "{\"emergencies\":" + options + ",\"plans\":" + items + "}");
             } else {
                 final long id = Long.parseLong(path.substring("/api/plans/".length()));
-                final Plan plan = plans.find(session.getId(), id);
+
+                if (method.equals("DELETE")) {
+                    if (plans.delete(session.getId(), id)) {
+                        ApiServer.respond(exchange, 200, "{\"status\":\"ok\"}");
+                    } else {
+                        error(exchange, 404, "Plano não encontrado.");
+                    }
+
+                    return;
+                }
+
+                final Plan plan = method.equals("PUT")
+                        ? plans.update(session.getId(), id, value(readForm(exchange), "emergency"))
+                        : plans.find(session.getId(), id);
+
                 if (plan == null) {
                     error(exchange, 404, "Plano não encontrado.");
                 } else {

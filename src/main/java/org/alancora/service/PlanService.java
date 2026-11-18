@@ -34,6 +34,17 @@ public final class PlanService {
         return plans.find(userId, id);
     }
 
+    public Plan update(final long userId, final long id, final String code) throws SQLException {
+        final User user = user(userId);
+        final Emergency emergency = Emergency.parse(code);
+        return plans.update(id, user, emergency, PlanEngine.VERSION, PlanEngine.generate(user, emergency));
+    }
+
+    public boolean delete(final long userId, final long id) throws SQLException {
+        user(userId);
+        return plans.delete(userId, id);
+    }
+
     private User user(final long id) throws SQLException {
         final User user = users.findById(id);
         if (user == null) {
