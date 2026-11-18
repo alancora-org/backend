@@ -41,28 +41,34 @@ public final class AuthHandler {
         this.secure = secure;
     }
 
-    public void handle(HttpExchange exchange) throws IOException {
-        String path = exchange.getRequestURI().getPath();
+    public void handle(final HttpExchange exchange) throws IOException {
+        final String path = exchange.getRequestURI().getPath();
 
-        String method = switch (path) {
-            case "/api/auth/me" -> "GET";
-            case "/api/auth/login", "/api/auth/register", "/api/auth/logout", "/api/auth/details" -> "POST";
+        final List<String> methods = switch (path) {
+            case "/api/auth/me" -> List.of("GET", "DELETE");
+            case "/api/auth/login", "/api/auth/register", "/api/auth/logout", "/api/auth/details" -> List.of("POST");
             default -> null;
         };
 
-        if (method == null) {
+        if (methods == null) {
             error(exchange, 404, "Rota não encontrada.");
             return;
         }
 
-        if (!exchange.getRequestMethod().equals(method)) {
-            exchange.getResponseHeaders().set("Allow", method);
+        if (!methods.contains(exchange.getRequestMethod())) {
+            exchange.getResponseHeaders().set("Allow", String.join(", ", methods));
             error(exchange, 405, "Método não permitido.");
             return;
         }
 
         switch (path) {
-            case "/api/auth/me" -> profile(exchange, false);
+            case "/api/auth/me" -> {
+                if (exchange.getRequestMethod().equals("DELETE")) {
+                    delete(exchange);
+                } else {
+                    profile(exchange, false);
+                }
+            }
             case "/api/auth/details" -> profile(exchange, true);
             case "/api/auth/logout" -> logout(exchange);
             case "/api/auth/login" -> authenticate(exchange, false);
@@ -113,6 +119,26 @@ public final class AuthHandler {
             error(exchange, 400, error.getMessage());
         } catch (final SQLException error) {
             error(exchange, 503, "Não foi possível acessar o banco. Tente novamente.");
+        }
+    }
+
+    private void delete(final HttpExchange exchange) throws IOException {
+        final User session = tokens.read(token(exchange));
+
+        if (session == null) {
+            error(exchange, 401, "Entre na sua conta para continuar.");
+            return;
+        }
+
+        try {
+            if (!auth.delete(session.getId())) {
+                error(exchange, 401, "Entre na sua conta para continuar.");
+                return;
+            }
+
+            logout(exchange);
+        } catch (final SQLException error) {
+            error(exchange, 503, "Não foi possível excluir sua conta. Tente novamente.");
         }
     }
 

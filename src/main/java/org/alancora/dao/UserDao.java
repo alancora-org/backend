@@ -55,6 +55,16 @@ public class UserDao {
         }
     }
 
+    public boolean delete(final long id) throws SQLException {
+        final String sql = "DELETE FROM usuario WHERE id = ?";
+
+        try (final Connection connection = Database.connect();
+                final PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, id);
+            return statement.executeUpdate() > 0;
+        }
+    }
+
     public List<Need> listNeeds() throws SQLException {
         final String sql = "SELECT codigo, nome FROM necessidade ORDER BY nome, codigo";
 

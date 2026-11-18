@@ -4,7 +4,9 @@ Backend desenvolvido em Java 21, utilizando PostgreSQL, JDBC e autenticação JW
 
 ## Executando
 
-É necessário ter **Java 21, Maven e PostgreSQL** instalados, além de um banco de dados já criado e em execução. Certifique-se de que o banco de dados esteja limpo antes de rodar o programa pela primeira vez.
+É necessário ter **Java 21, Maven e PostgreSQL** instalados.
+
+**O serviço PostgreSQL deve estar em execução e o banco usado pela aplicação deve existir e estar vazio antes da primeira execução, sem tabelas nem dados anteriores.** O backend cria as tabelas, mas não inicia o PostgreSQL nem cria o banco, apenas as tabelas.
 
 1. Copie `.env.example` para `.env` (carregado automaticamente).
 2. Configure as variáveis de ambiente conforme o exemplo, especialmente `DB_URL` e `JWT_SECRET`.

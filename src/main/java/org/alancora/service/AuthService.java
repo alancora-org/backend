@@ -58,6 +58,10 @@ public final class AuthService {
         return users.findById(id);
     }
 
+    public boolean delete(final long id) throws SQLException {
+        return users.delete(id);
+    }
+
     public User saveDetails(final long id, final String housing, final String location,
             final List<String> needs) throws SQLException {
         return saveDetails(id, housing, location, needs, null);
