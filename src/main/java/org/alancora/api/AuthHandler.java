@@ -1,17 +1,24 @@
 package org.alancora.api;
 
+import static org.alancora.api.Http.COOKIE_NAME;
+import static org.alancora.api.Http.array;
+import static org.alancora.api.Http.error;
+import static org.alancora.api.Http.quote;
+import static org.alancora.api.Http.readForm;
+import static org.alancora.api.Http.token;
+import static org.alancora.api.Http.value;
+
 import java.io.IOException;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.alancora.api.Http.RequestException;
 import org.alancora.config.Env;
+import org.alancora.model.HousingType;
 import org.alancora.model.Need;
 import org.alancora.model.User;
 import org.alancora.service.AuthService;
@@ -20,19 +27,18 @@ import org.alancora.service.Tokens;
 import com.sun.net.httpserver.HttpExchange;
 
 public final class AuthHandler {
-    private static final int MAX_BODY_SIZE = 8192;
-    private static final String COOKIE_NAME = "ancora_token";
-
     private final AuthService auth;
     private final Tokens tokens;
     private final boolean secure;
 
-    public AuthHandler(AuthService auth) {
-        this.auth = auth;
+    public AuthHandler(final AuthService auth) {
+        this(auth, new Tokens(Env.get("JWT_SECRET")), Boolean.parseBoolean(Env.get("COOKIE_SECURE", "false")));
+    }
 
-        this.tokens = new Tokens(Env.get("JWT_SECRET"));
-        this.secure = Boolean.parseBoolean(
-                Env.get("COOKIE_SECURE", "false"));
+    public AuthHandler(final AuthService auth, final Tokens tokens, final boolean secure) {
+        this.auth = auth;
+        this.tokens = tokens;
+        this.secure = secure;
     }
 
     public void handle(HttpExchange exchange) throws IOException {
@@ -78,7 +84,7 @@ public final class AuthHandler {
             if (save) {
                 final Map<String, List<String>> form = readForm(exchange);
                 user = auth.saveDetails(session.getId(), value(form, "housing"), value(form, "location"),
-                        choices(form, "needs"));
+                        choices(form, "needs"), form.containsKey("housingType") ? value(form, "housingType") : null);
             } else {
                 user = auth.findById(session.getId());
             }
@@ -92,9 +98,13 @@ public final class AuthHandler {
                     + ",\"name\":" + quote(user.getName())
                     + ",\"email\":" + quote(user.getEmail())
                     + ",\"housing\":" + quote(user.getHousing())
+                    + ",\"housingType\":" + quote(user.getHousingType())
                     + ",\"location\":" + quote(user.getLocation())
                     + ",\"needs\":" + array(user.getNeeds())
-                    + (save ? "" : ",\"options\":" + options(auth.listNeeds())) + "}";
+                    + (save ? ""
+                            : ",\"options\":" + options(auth.listNeeds())
+                                    + ",\"housingTypes\":" + housingTypes())
+                    + "}";
 
             ApiServer.respond(exchange, 200, json);
         } catch (final RequestException error) {
@@ -143,57 +153,20 @@ public final class AuthHandler {
         }
     }
 
-    private static Map<String, List<String>> readForm(HttpExchange exchange) throws IOException {
-        String type = exchange.getRequestHeaders().getFirst("Content-Type");
-
-        if (type == null || !type.split(";", 2)[0].strip().equalsIgnoreCase("application/x-www-form-urlencoded")) {
-            throw new RequestException(415, "Formato de formulário inválido.");
-        }
-
-        byte[] bytes = exchange.getRequestBody().readNBytes(MAX_BODY_SIZE + 1);
-
-        if (bytes.length > MAX_BODY_SIZE) {
-            throw new RequestException(413, "Formulário muito grande.");
-        }
-
-        final Map<String, List<String>> form = new HashMap<>();
-        String body = new String(bytes, StandardCharsets.UTF_8);
-
-        for (String part : body.split("&")) {
-            String[] pair = part.split("=", 2);
-
-            if (pair.length != 2) {
-                continue;
-            }
-
-            try {
-                final String name = URLDecoder.decode(pair[0], StandardCharsets.UTF_8);
-                final String value = URLDecoder.decode(pair[1], StandardCharsets.UTF_8);
-                form.computeIfAbsent(name, key -> new ArrayList<>()).add(value);
-            } catch (IllegalArgumentException e) {
-                throw new RequestException(400, "Formulário inválido.");
-            }
-        }
-
-        return form;
-    }
-
-    private static String value(final Map<String, List<String>> form, final String name) {
-        return form.getOrDefault(name, List.of("")).getLast();
-    }
-
     private static List<String> choices(final Map<String, List<String>> form, final String name) {
         final List<String> values = form.get(name);
         return values == null ? null : values.stream().filter(value -> !value.isEmpty()).toList();
     }
 
-    private static String array(final List<String> values) {
-        return values.stream().map(AuthHandler::quote).collect(Collectors.joining(",", "[", "]"));
-    }
-
     private static String options(final List<Need> needs) {
         return needs.stream().map(need -> "{\"code\":" + quote(need.getCode())
                 + ",\"name\":" + quote(need.getName()) + "}")
+                .collect(Collectors.joining(",", "[", "]"));
+    }
+
+    private static String housingTypes() {
+        return Arrays.stream(HousingType.values()).map(type -> "{\"code\":" + quote(type.name())
+                + ",\"name\":" + quote(type.getName()) + "}")
                 .collect(Collectors.joining(",", "[", "]"));
     }
 
@@ -204,53 +177,5 @@ public final class AuthHandler {
                 + (secure ? "; Secure" : "");
 
         exchange.getResponseHeaders().set("Set-Cookie", cookie);
-    }
-
-    private static String token(HttpExchange exchange) {
-        String header = exchange.getRequestHeaders().getFirst("Cookie");
-
-        if (header == null) {
-            return "";
-        }
-
-        for (String part : header.split(";")) {
-            String cookie = part.strip();
-
-            if (cookie.startsWith(COOKIE_NAME + "=")) {
-                return cookie.substring(COOKIE_NAME.length() + 1);
-            }
-        }
-
-        return "";
-    }
-
-    private static void error(HttpExchange exchange, int status, String message)
-            throws IOException {
-        ApiServer.respond(exchange, status, "{\"error\":" + quote(message) + "}");
-    }
-
-    private static String quote(String text) {
-        StringBuilder result = new StringBuilder("\"");
-
-        for (char c : text.toCharArray()) {
-            if (c == '"' || c == '\\') {
-                result.append('\\').append(c);
-            } else if (c < 32) {
-                result.append(String.format("\\u%04x", (int) c));
-            } else {
-                result.append(c);
-            }
-        }
-
-        return result.append('"').toString();
-    }
-
-    private static final class RequestException extends RuntimeException {
-        final int status;
-
-        RequestException(int status, String message) {
-            super(message);
-            this.status = status;
-        }
     }
 }

@@ -9,6 +9,7 @@ public final class User {
     private final String passwordHash;
     private final String housing;
     private final String location;
+    private final String housingType;
     private final List<String> needs;
 
     public User(final long id, final String name, final String email, final String passwordHash) {
@@ -22,12 +23,18 @@ public final class User {
 
     public User(final long id, final String name, final String email, final String passwordHash,
             final String housing, final String location, final List<String> needs) {
+        this(id, name, email, passwordHash, housing, location, "", needs);
+    }
+
+    public User(final long id, final String name, final String email, final String passwordHash,
+            final String housing, final String location, final String housingType, final List<String> needs) {
         this.id = id;
         this.name = name;
         this.email = email;
         this.passwordHash = passwordHash;
         this.housing = housing;
         this.location = location;
+        this.housingType = housingType;
         this.needs = List.copyOf(needs);
     }
 
@@ -53,6 +60,10 @@ public final class User {
 
     public String getLocation() {
         return location;
+    }
+
+    public String getHousingType() {
+        return housingType;
     }
 
     public List<String> getNeeds() {

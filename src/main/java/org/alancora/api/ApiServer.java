@@ -4,8 +4,10 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 
+import org.alancora.dao.PlanDao;
 import org.alancora.dao.UserDao;
 import org.alancora.service.AuthService;
+import org.alancora.service.PlanService;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -13,6 +15,7 @@ import com.sun.net.httpserver.HttpServer;
 public final class ApiServer {
     private final HttpServer server;
     private final AuthHandler auth = new AuthHandler(new AuthService(new UserDao()));
+    private final PlanHandler plans = new PlanHandler(new PlanService(new UserDao(), new PlanDao()));
 
     public ApiServer(final int port) throws IOException {
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
@@ -33,6 +36,11 @@ public final class ApiServer {
 
             if (path.startsWith("/api/auth/")) {
                 auth.handle(exchange);
+                return;
+            }
+
+            if (path.equals("/api/plans") || path.startsWith("/api/plans/")) {
+                plans.handle(exchange);
                 return;
             }
 

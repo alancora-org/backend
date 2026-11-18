@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Locale;
 
 import org.alancora.dao.UserDao;
+import org.alancora.model.HousingType;
 import org.alancora.model.Need;
 import org.alancora.model.User;
 
@@ -59,11 +60,17 @@ public final class AuthService {
 
     public User saveDetails(final long id, final String housing, final String location,
             final List<String> needs) throws SQLException {
+        return saveDetails(id, housing, location, needs, null);
+    }
+
+    public User saveDetails(final long id, final String housing, final String location,
+            final List<String> needs, final String housingType) throws SQLException {
         final String cleanHousing = cleanDetail(housing, "Moradia");
         final String cleanLocation = cleanDetail(location, "Localização aproximada");
+        final String type = housingType == null ? null : HousingType.parse(housingType).name();
         final List<String> cleanNeeds = cleanNeeds(needs);
 
-        return users.saveDetails(id, cleanHousing, cleanLocation, cleanNeeds);
+        return users.saveDetails(id, cleanHousing, cleanLocation, cleanNeeds, type);
     }
 
     public List<Need> listNeeds() throws SQLException {

@@ -73,7 +73,13 @@ public class UserDao {
 
     public User saveDetails(final long id, final String housing, final String location,
             final List<String> needs) throws SQLException {
-        final String sql = "UPDATE usuario SET moradia = ?, localizacao_aproximada = ? WHERE id = ?";
+        return saveDetails(id, housing, location, needs, null);
+    }
+
+    public User saveDetails(final long id, final String housing, final String location,
+            final List<String> needs, final String housingType) throws SQLException {
+        final String sql = "UPDATE usuario SET moradia = ?, localizacao_aproximada = ?, "
+                + "tipo_moradia = COALESCE(?, tipo_moradia) WHERE id = ?";
 
         try (final Connection connection = Database.connect()) {
             connection.setAutoCommit(false);
@@ -81,7 +87,8 @@ public class UserDao {
             try (final PreparedStatement statement = connection.prepareStatement(sql)) {
                 statement.setString(1, housing);
                 statement.setString(2, location);
-                statement.setLong(3, id);
+                statement.setString(3, housingType);
+                statement.setLong(4, id);
 
                 if (statement.executeUpdate() == 0) {
                     connection.rollback();
@@ -124,7 +131,8 @@ public class UserDao {
     }
 
     private static User findById(final Connection connection, final long id) throws SQLException {
-        final String sql = "SELECT u.nome, u.email, u.senha_hash, u.moradia, u.localizacao_aproximada, n.necessidade_codigo "
+        final String sql = "SELECT u.nome, u.email, u.senha_hash, u.moradia, u.localizacao_aproximada, "
+                + "u.tipo_moradia, n.necessidade_codigo "
                 + "FROM usuario u LEFT JOIN usuario_necessidade n ON n.usuario_id = u.id "
                 + "WHERE u.id = ? ORDER BY n.necessidade_codigo";
 
@@ -141,6 +149,7 @@ public class UserDao {
                 final String hash = result.getString("senha_hash");
                 final String housing = result.getString("moradia");
                 final String location = result.getString("localizacao_aproximada");
+                final String housingType = result.getString("tipo_moradia");
                 final List<String> needs = new ArrayList<>();
 
                 do {
@@ -150,7 +159,7 @@ public class UserDao {
                     }
                 } while (result.next());
 
-                return new User(id, name, email, hash, housing, location, needs);
+                return new User(id, name, email, hash, housing, location, housingType, needs);
             }
         }
     }
